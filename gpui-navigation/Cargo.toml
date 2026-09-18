@@ -1,0 +1,13 @@
+[package]
+name = "gpui-navigation"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Typed, hierarchical navigation for GPUI desktop applications"
+license.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+gpui-navigation-derive = { path = "../gpui-navigation-derive", version = "0.1.0" }
+thiserror.workspace = true
+tracing = "0.1.44"

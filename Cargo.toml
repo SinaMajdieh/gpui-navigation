@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+  "gpui-navigation",
+  "gpui-navigation-derive",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+gpui-kit = "=0.6.1"
+proc-macro-crate = "3.5"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+thiserror = "2"
