@@ -115,11 +115,11 @@ impl NavPath {
     where
         R: RouteSegment,
     {
-        Self::new().push(route)
+        Self::new().then(route)
     }
 
     /// Appends one route segment to the path.
-    pub fn push<R>(mut self, route: R) -> Self
+    pub fn then<R>(mut self, route: R) -> Self
     where
         R: RouteSegment,
     {
@@ -271,6 +271,35 @@ where
     }
 }
 
+/// Constructs a `NavPath` from a sequence of route segments.
+///
+/// This macro provides a concise way to define navigation paths, replacing
+/// the builder pattern `NavPath::root(A).then(B).then(C)`.
+///
+/// # Example
+///```rust
+/// use gpui_navigation::nav_path;
+///
+/// // Create a simple path
+/// let path = nav_path![WorkspaceRoute::Projects, ProjectsRoute::Home];
+///
+/// // Create an empty path
+/// let empty = nav_path![];
+/// ```
+#[macro_export]
+macro_rules! nav_path {
+    () => {
+        $crate::NavPath::empty()
+    };
+    ( $head:expr $(, $tail:expr )* $(,)? ) => {{
+        let mut path = $crate::NavPath::root(($head).clone());
+        $(
+            path = path.then(($tail).clone());
+        )*
+        path
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,13 +317,13 @@ mod tests {
 
     #[test]
     fn builds_and_joins_paths() {
-        let path = NavPath::root(Section::Projects).push(Project::Open(42));
+        let path = NavPath::root(Section::Projects).then(Project::Open(42));
 
         assert_eq!(path.len(), 2);
         assert_eq!(path.first::<Section>().ok(), Some(Some(&Section::Projects)));
         assert_eq!(path.last::<Project>().ok(), Some(Some(&Project::Open(42))));
 
-        let suffix = NavPath::new().push(Project::Open(7));
+        let suffix = NavPath::new().then(Project::Open(7));
         let joined = path.join(suffix);
 
         assert_eq!(joined.len(), 3);
@@ -303,13 +332,14 @@ mod tests {
 
     #[test]
     fn parent_and_root_are_structural_operations() {
-        let path = NavPath::root(Section::Projects).push(Project::Open(42));
+        let path = NavPath::root(Section::Projects).then(Project::Open(42));
 
         assert_eq!(path.parent().as_ref().map(NavPath::len), Some(1));
         assert_eq!(path.root_path().as_ref().map(NavPath::len), Some(1));
-        assert!(path
-            .parent()
-            .is_some_and(|parent| { parent.last_is(&Section::Projects) }));
+        assert!(
+            path.parent()
+                .is_some_and(|parent| { parent.last_is(&Section::Projects) })
+        );
     }
 
     #[test]
@@ -326,7 +356,7 @@ mod tests {
 
     #[test]
     fn contains_and_last_match_values() {
-        let path = NavPath::root(Section::Projects).push(Project::Open(42));
+        let path = NavPath::root(Section::Projects).then(Project::Open(42));
 
         assert!(path.contains(&Section::Projects));
         assert!(path.last_is(&Project::Open(42)));

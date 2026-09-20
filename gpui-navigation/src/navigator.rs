@@ -107,12 +107,12 @@ impl Navigator {
         Ok(())
     }
 
-    /// Appends one route segment to the current location.
-    pub fn push<R>(route: R, window: &mut Window, cx: &mut App)
+    /// Appends `NavPath` to the current location.
+    pub fn push<P>(path: P, window: &mut Window, cx: &mut App)
     where
-        R: RouteSegment,
+        P: Into<NavPath>,
     {
-        let result = Self::try_push(route, window, cx);
+        let result = Self::try_push(path, window, cx);
 
         if let Err(error) = result {
             error!(%error, "navigation push failed");
@@ -120,15 +120,15 @@ impl Navigator {
     }
 
     /// Fallible form of [`Navigator::push`].
-    pub fn try_push<R>(route: R, window: &mut Window, cx: &mut App) -> Result<(), NavigationError>
+    pub fn try_push<P>(path: P, window: &mut Window, cx: &mut App) -> Result<(), NavigationError>
     where
-        R: RouteSegment,
+        P: Into<NavPath>,
     {
         debug!("pushing route");
-
+        let path = path.into();
         let current = Self::current(cx).ok_or(NavigationError::NoCurrentLocation)?;
 
-        Self::try_go(current.push(route), window, cx)
+        Self::try_go(current.join(path), window, cx)
     }
 
     /// Appends a complete relative path.
@@ -184,7 +184,7 @@ impl Navigator {
 
         let parent = current.parent().unwrap_or_default();
 
-        Self::try_replace_path(parent.push(route), window, cx)
+        Self::try_replace_path(parent.then(route), window, cx)
     }
 
     /// Replaces the complete current path without modifying history.
