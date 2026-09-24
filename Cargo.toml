@@ -11,7 +11,7 @@ rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-gpui-kit = "=0.6.1"
+gpui-kit = "0.6"
 proc-macro-crate = "3.5"
 proc-macro2 = "1"
 quote = "1"
