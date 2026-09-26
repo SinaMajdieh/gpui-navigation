@@ -1,19 +1,17 @@
-[workspace]
-resolver = "2"
-members = [
-  "gpui-navigation",
-  "gpui-navigation-derive",
-]
-
-[workspace.package]
+[package]
+name = "gpui-navigation"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
+description = "A global, zero-propagation navigation layer for GPUI Kit's NavStack."
+repository = "https://github.com/SinaMajdieh/gpui-navigation"
+keywords = ["gpui", "navigation", "router", "desktop", "ui"]
+categories = ["gui"]
 
-[workspace.dependencies]
-gpui-kit = "0.6"
-proc-macro-crate = "3.5"
-proc-macro2 = "1"
-quote = "1"
-syn = { version = "2", features = ["full"] }
+[dependencies]
+gpui-kit = { version = "0.6", default-features = false }
 thiserror = "2"
+
+[dev-dependencies]
+gpui-kit = { version = "0.6", default-features = false, features = ["test-support"] }
