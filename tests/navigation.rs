@@ -1,6 +1,12 @@
 use gpui_kit::{AppContext, Context, Render, Window, div};
 use gpui_navigation::{NavMotion, NavStackEvent, Navigator, NavigatorConfig, NavigatorError};
 
+#[derive(Clone, Copy, Debug)]
+struct Workspace;
+
+#[derive(Clone, Copy, Debug)]
+struct Settings;
+
 struct Page;
 
 impl Render for Page {
@@ -11,34 +17,119 @@ impl Render for Page {
 
 #[gpui_kit::test]
 fn install_and_root_navigation(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        assert!(Navigator::install(cx, NavigatorConfig::default()).is_ok());
-    });
+    cx.update(|cx| Navigator::install(cx, NavigatorConfig::default()));
 
     let root = cx.new(|_| Page);
     let second = cx.new(|_| Page);
 
     cx.update(|cx| {
         let navigator = Navigator::new();
-        assert!(navigator.push(root, cx).is_ok());
-        assert!(
-            navigator
-                .push_with_motion(second, NavMotion::Immediate, cx)
-                .is_ok()
+        navigator.push(root, cx);
+        navigator.push_with_motion(second, NavMotion::Immediate, cx);
+
+        assert_eq!(navigator.depth(cx), 2);
+        assert!(navigator.can_pop(cx));
+        assert!(!navigator.can_forward(cx));
+        assert!(navigator.current_as::<Page>(cx).is_some());
+    });
+}
+
+#[gpui_kit::test]
+fn fallible_api_remains_available(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        Navigator::try_install(cx, NavigatorConfig::default()).unwrap();
+
+        let root = cx.new(|_| Page);
+        Navigator::new().try_push(root, cx).unwrap();
+        assert_eq!(Navigator::new().try_depth(cx).unwrap(), 1);
+        Navigator::new().try_back(cx).unwrap();
+    });
+}
+
+#[gpui_kit::test]
+fn typed_scopes_are_independent(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| Navigator::install(cx, NavigatorConfig::default()));
+
+    let root = cx.new(|_| Page);
+    let workspace_a = cx.new(|_| Page);
+    let workspace_b = cx.new(|_| Page);
+    let settings = cx.new(|_| Page);
+
+    cx.update(|cx| {
+        let root_nav = Navigator::new();
+        let workspace = root_nav.scope(Workspace);
+        let nested = workspace.scope(Settings);
+
+        root_nav.push(root, cx);
+        workspace.push(workspace_a, cx);
+        workspace.push(workspace_b, cx);
+        nested.push(settings, cx);
+
+        assert_eq!(root_nav.depth(cx), 1);
+        assert_eq!(workspace.depth(cx), 2);
+        assert_eq!(nested.depth(cx), 1);
+        assert_eq!(workspace.path().unwrap().depth(), 1);
+        assert_eq!(
+            workspace
+                .path()
+                .unwrap()
+                .segments()
+                .next()
+                .unwrap()
+                .type_id(),
+            std::any::TypeId::of::<Workspace>()
         );
 
-        assert_eq!(navigator.depth(cx).ok(), Some(2));
-        assert_eq!(navigator.can_pop(cx).ok(), Some(true));
-        assert_eq!(navigator.can_forward(cx).ok(), Some(false));
-        assert!(navigator.current_as::<Page>(cx).ok().flatten().is_some());
+        assert_eq!(Navigator::current_scope_path(cx).unwrap().depth(), 2);
+        assert_eq!(Navigator::new().current_scope().depth(cx), 1);
+    });
+}
+
+#[gpui_kit::test]
+fn current_scope_navigator_targets_latest_active_scope(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| Navigator::install(cx, NavigatorConfig::default()));
+
+    let root = cx.new(|_| Page);
+    let workspace = cx.new(|_| Page);
+    let workspace_second = cx.new(|_| Page);
+
+    cx.update(|cx| {
+        Navigator::new().push(root, cx);
+
+        let workspace_nav = Navigator::new().scope(Workspace).immediate();
+        workspace_nav.push(workspace, cx);
+        workspace_nav.push(workspace_second, cx);
+
+        let current = Navigator::new().current_scope().immediate();
+        assert_eq!(current.depth(cx), 2);
+        assert!(current.can_pop(cx));
+        current.back(cx);
+        assert_eq!(workspace_nav.depth(cx), 1);
+    });
+}
+
+#[gpui_kit::test]
+fn current_scope_can_append_typed_children(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| Navigator::install(cx, NavigatorConfig::default()));
+
+    let workspace = cx.new(|_| Page);
+    let settings = cx.new(|_| Page);
+
+    cx.update(|cx| {
+        let workspace_nav = Navigator::new().scope(Workspace).immediate();
+        workspace_nav.push(workspace, cx);
+
+        let current_child = Navigator::new().current_scope().scope(Settings);
+        current_child.push(settings, cx);
+
+        assert_eq!(workspace_nav.depth(cx), 1);
+        assert_eq!(current_child.depth(cx), 1);
     });
 }
 
 #[gpui_kit::test]
 fn navigation_history_matches_navstack_semantics(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        assert!(Navigator::install(cx, NavigatorConfig::default()).is_ok());
-    });
+    cx.update(|cx| Navigator::install(cx, NavigatorConfig::default()));
 
     let first = cx.new(|_| Page);
     let second = cx.new(|_| Page);
@@ -49,54 +140,26 @@ fn navigation_history_matches_navstack_semantics(cx: &mut gpui_kit::TestAppConte
     cx.update(|cx| {
         let navigator = Navigator::new().immediate();
 
-        assert!(navigator.push(first, cx).is_ok());
-        assert!(navigator.push(second, cx).is_ok());
-        assert!(navigator.push(third, cx).is_ok());
-        assert_eq!(navigator.depth(cx).ok(), Some(3));
+        navigator.push(first, cx);
+        navigator.push(second, cx);
+        navigator.push(third, cx);
+        assert_eq!(navigator.depth(cx), 3);
 
-        assert!(navigator.pop(cx).ok().flatten().is_some());
-        assert_eq!(navigator.depth(cx).ok(), Some(2));
-        assert_eq!(navigator.can_forward(cx).ok(), Some(true));
+        navigator.pop(cx);
+        assert_eq!(navigator.depth(cx), 2);
+        assert!(navigator.can_forward(cx));
 
-        assert!(navigator.forward(cx).ok().flatten().is_some());
-        assert_eq!(navigator.depth(cx).ok(), Some(3));
-        assert_eq!(navigator.can_forward(cx).ok(), Some(false));
+        navigator.forward(cx);
+        assert_eq!(navigator.depth(cx), 3);
+        assert!(!navigator.can_forward(cx));
 
-        assert!(navigator.pop(cx).ok().flatten().is_some());
-        assert!(navigator.push(replacement, cx).is_ok());
-        assert_eq!(navigator.can_forward(cx).ok(), Some(false));
-        assert_eq!(navigator.depth(cx).ok(), Some(3));
+        navigator.pop(cx);
+        navigator.push(replacement, cx);
+        assert!(!navigator.can_forward(cx));
+        assert_eq!(navigator.depth(cx), 3);
 
-        assert!(navigator.replace(reset_root, cx).ok().flatten().is_some());
-        assert_eq!(navigator.depth(cx).ok(), Some(3));
-    });
-}
-
-#[gpui_kit::test]
-fn nested_scopes_are_independent(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        assert!(Navigator::install(cx, NavigatorConfig::default()).is_ok());
-    });
-
-    let root = cx.new(|_| Page);
-    let nested_a = cx.new(|_| Page);
-    let nested_b = cx.new(|_| Page);
-
-    cx.update(|cx| {
-        let root_nav = Navigator::new();
-        let nested_nav = Navigator::new().scope("workspace");
-        let child_nav = nested_nav.scope("settings");
-
-        assert!(root_nav.push(root, cx).is_ok());
-        assert!(nested_nav.push(nested_a, cx).is_ok());
-        assert!(nested_nav.push(nested_b, cx).is_ok());
-        assert!(child_nav.push(cx.new(|_| Page), cx).is_ok());
-
-        assert_eq!(root_nav.depth(cx).ok(), Some(1));
-        assert_eq!(nested_nav.depth(cx).ok(), Some(2));
-        assert_eq!(child_nav.depth(cx).ok(), Some(1));
-        assert_eq!(nested_nav.path().to_string(), "/workspace");
-        assert_eq!(child_nav.path().to_string(), "/workspace/settings");
+        navigator.replace(reset_root, cx);
+        assert_eq!(navigator.depth(cx), 3);
     });
 }
 
@@ -113,9 +176,7 @@ fn subscription_receives_navigation_events(cx: &mut gpui_kit::TestAppContext) {
         }
     }
 
-    cx.update(|cx| {
-        assert!(Navigator::install(cx, NavigatorConfig::default()).is_ok());
-    });
+    cx.update(|cx| Navigator::install(cx, NavigatorConfig::default()));
 
     let root = cx.new(|_| Page);
     let second = cx.new(|_| Page);
@@ -126,18 +187,15 @@ fn subscription_receives_navigation_events(cx: &mut gpui_kit::TestAppContext) {
 
     cx.update(|cx| {
         observer.update(cx, |observer, cx| {
-            let subscription = Navigator::new().subscribe(cx, |observer, event, _| {
+            observer.subscription = Navigator::new().subscribe(cx, |observer, event, _| {
                 observer.events.push(*event);
             });
-            assert!(subscription.is_ok());
-            observer.subscription = subscription.ok();
         });
     });
 
     cx.update(|cx| {
-        let nav = Navigator::new();
-        assert!(nav.push(root, cx).is_ok());
-        assert!(nav.push(second, cx).is_ok());
+        Navigator::new().push(root, cx);
+        Navigator::new().push(second, cx);
     });
 
     cx.read(|cx| {
@@ -151,38 +209,53 @@ fn subscription_receives_navigation_events(cx: &mut gpui_kit::TestAppContext) {
 
 #[gpui_kit::test]
 fn scope_removal_releases_scope_and_descendants(cx: &mut gpui_kit::TestAppContext) {
-    cx.update(|cx| {
-        assert!(Navigator::install(cx, NavigatorConfig::default()).is_ok());
-    });
+    cx.update(|cx| Navigator::install(cx, NavigatorConfig::default()));
 
     let page = cx.new(|_| Page);
 
     cx.update(|cx| {
-        let scope = Navigator::new().scope("workspace");
-        let child = scope.scope("settings");
+        let scope = Navigator::new().scope(Workspace);
+        let child = scope.scope(Settings);
 
-        assert!(scope.push(page.clone(), cx).is_ok());
-        assert!(child.push(cx.new(|_| Page), cx).is_ok());
-        assert_eq!(scope.remove_scope(cx).ok(), Some(true));
+        scope.push(page.clone(), cx);
+        child.push(cx.new(|_| Page), cx);
+        assert!(scope.remove_scope(cx));
 
         assert!(matches!(
-            scope.depth(cx),
+            scope.try_depth(cx),
             Err(NavigatorError::ScopeNotFound(_))
         ));
         assert!(matches!(
-            child.depth(cx),
+            child.try_depth(cx),
             Err(NavigatorError::ScopeNotFound(_))
         ));
+        assert_eq!(Navigator::try_current_scope_path(cx).unwrap().depth(), 0);
     });
 }
 
 #[gpui_kit::test]
-fn duplicate_install_is_rejected(cx: &mut gpui_kit::TestAppContext) {
+fn duplicate_install_is_reported_without_panicking(cx: &mut gpui_kit::TestAppContext) {
     cx.update(|cx| {
-        assert!(Navigator::install(cx, NavigatorConfig::default()).is_ok());
-        assert!(matches!(
-            Navigator::install(cx, NavigatorConfig::default()),
-            Err(NavigatorError::AlreadyInstalled)
-        ));
+        Navigator::install(cx, NavigatorConfig::default());
+        Navigator::install(cx, NavigatorConfig::default());
+        assert!(Navigator::is_installed(cx));
+    });
+}
+
+#[gpui_kit::test]
+fn non_fallible_calls_are_safe_before_install(cx: &mut gpui_kit::TestAppContext) {
+    cx.update(|cx| {
+        let navigator = Navigator::new();
+        navigator.back(cx);
+        navigator.forward(cx);
+        navigator.clear(cx);
+        assert_eq!(navigator.depth(cx), 0);
+        assert!(navigator.is_empty(cx));
+        assert!(!navigator.can_pop(cx));
+        assert!(!navigator.can_forward(cx));
+        assert!(navigator.is_at_root(cx));
+        assert!(navigator.current(cx).is_none());
+        assert!(navigator.views(cx).is_empty());
+        assert!(Navigator::current_scope_path(cx).is_none());
     });
 }

@@ -1,14 +1,18 @@
 use gpui_kit::base::NavMotion;
 
 /// Configuration for the application-wide navigation registry.
+///
+/// A [`NavigatorConfig`] controls behavior shared by navigation operations
+/// that do not provide their own per-operation configuration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NavigatorConfig {
-    /// Transition used by operations that do not specify a per-call motion.
+    /// Transition used when a navigation operation does not specify a motion.
     pub default_motion: NavMotion,
 }
 
 impl NavigatorConfig {
-    /// Creates the default navigator configuration.
+    /// Creates a configuration with [`NavMotion::Animated`] as the default
+    /// transition.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -16,7 +20,9 @@ impl NavigatorConfig {
         }
     }
 
-    /// Returns a copy using `motion` as the default transition.
+    /// Returns a configuration with `motion` as the default transition.
+    ///
+    /// This method does not modify the original configuration.
     #[must_use]
     pub const fn with_default_motion(self, motion: NavMotion) -> Self {
         Self {

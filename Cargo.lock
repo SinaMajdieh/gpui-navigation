@@ -2377,6 +2377,7 @@ version = "0.1.0"
 dependencies = [
  "gpui-kit",
  "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

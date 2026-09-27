@@ -3,15 +3,16 @@ name = "gpui-navigation"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-license = "MIT OR Apache-2.0"
 description = "A global, zero-propagation navigation layer for GPUI Kit's NavStack."
 repository = "https://github.com/SinaMajdieh/gpui-navigation"
-keywords = ["gpui", "navigation", "router", "desktop", "ui"]
+license = "MIT OR Apache-2.0"
+keywords = ["desktop", "gpui", "navigation", "router", "ui"]
 categories = ["gui"]
 
 [dependencies]
 gpui-kit = { version = "0.6", default-features = false }
 thiserror = "2"
+tracing = "0.1"
 
 [dev-dependencies]
 gpui-kit = { version = "0.6", default-features = false, features = ["test-support"] }
